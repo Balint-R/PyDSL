@@ -178,7 +178,7 @@ class CompileTimeCallable(Protocol):
     delegate its on_Call behavior to another class by having its instance under
     the on_Call attribute. This delegation often forms an attribute chain.
 
-    Note: this class' behavior is in likeness to Python's Callable, but not
+    Note: this class's behavior is in likeness to Python's Callable, but not
     congruent. Callable performs `type(x).__call__(x, arg1, ...)` uniformly to
     any x.
     This deviation is for the sake of ergonomics. It avoids requiring every
@@ -189,8 +189,15 @@ class CompileTimeCallable(Protocol):
     decorate it with @classmethod.
 
     CompileTimeCallable uses on_Call instead of __call__.
+
+    Note: there are currently 2 general interfaces through which PyDSL objects
+    can be called:
+    - Through on_Call(attr_chain, visitor, node, prefix_args)
+    - Through __call__(visitor, args)
+    
     """
 
+    @staticmethod
     def on_Call(
         attr_chain: list[Any],
         visitor: "ToMLIRBase",
@@ -231,29 +238,20 @@ def handle_CompileTimeCallable(
 
     # recursively get the on_Call of the object until it's a Callable or it's
     # unresolvable
-    # we avoid getting type(x) if it's Python's `type`, i.e. if x is a class
     while True:
         x = attr_chain[-1]
 
-        match x:
-            case _ if issubclass(type(x), type):
-                # if x is a class, fetch its on_Call
-                on_Call = x.on_Call
-            case _:
-                # if x is an instance, fetch its class's on_Call
-                on_Call = type(x).on_Call
-
-        match on_Call:
+        match x.on_Call:
             # Is this object callable using PyDSL's protocol mechanism?
             case CompileTimeCallable():
-                attr_chain.append(on_Call)
+                attr_chain.append(x.on_Call)
                 continue
             # Is this object callable using Python's built-in mechanism?
             # This will eventually be true since all calls on callable
             # object/"fake functions" ultimately results in a real
             # function call
             case Callable():
-                return on_Call(
+                return x.on_Call(
                     attr_chain, visitor, node, prefix_args=prefix_args
                 )
             case _:

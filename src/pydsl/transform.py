@@ -248,10 +248,22 @@ def recursively(
     if not isinstance(targets, Iterable):
         targets = [targets]
 
+    import dis
+    print(repr(func))
+    print(func.__code__.co_qualname)
+    print(func.__code__.co_code)
+    print(dis.dis(func.__code__))
+    print('func.__globals__["tag"] =', func.__globals__['tag'])
+
     # This function filters out all elements that are not operators and pass
     # only operators into func
     def func_with_filter(x):
-        return func(x) if supports_operator(x) else x
+        if supports_operator(x):
+            print(repr(func))
+            print(dis.dis(func.__code__))
+            return func(x)
+        else:
+            return x
 
     return [
         visitor.visit_with_interception(t, func_with_filter) for t in targets

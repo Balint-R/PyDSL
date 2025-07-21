@@ -2,6 +2,7 @@ import numpy as np
 from numpy.lib.stride_tricks import as_strided
 
 import pydsl.linalg as linalg
+import pydsl.tensor as tensor
 from pydsl.frontend import compile
 from pydsl.memref import DYNAMIC
 
@@ -233,7 +234,7 @@ def test_arg_copy():
     optimize the below code to modify the tensor in-place.
     """
 
-    @compile()
+    @compile(dump_mlir=True, dump_mlir_passes=True)
     def f(m1: Tensor[SInt32, 10]) -> Tensor[SInt32, 10]:
         m1[4] = 100
         m1[8] = 101
@@ -247,6 +248,48 @@ def test_arg_copy():
     # Check if n1 was also updated
     assert not (n1 == n1_old).all()
     assert (test_res == n1).all()
+
+
+def test_zeros():
+    @compile()
+    def f() -> TensorF32_3:
+        m1 = tensor.zeros((10, 20, 30), F32)
+        return m1
+
+    n1 = f()
+    assert (n1 == 0).all()
+
+
+def test_cast():
+    @compile()
+    def f(t1: Tensor[F32, DYNAMIC, 32, 5]) -> Tensor[F32, 64, 32, DYNAMIC]:
+        t2 = t1.cast((64, 32, DYNAMIC))
+        return t2
+    
+    n1 = multi_arange((64, 32, 5), np.float32)
+    cor_res = n1.copy()
+    assert (f(n1) == cor_res).all()
+
+
+def test_zeros():
+    @compile()
+    def f() -> TensorF32_3:
+        m1 = tensor.zeros((10, 20, 30), F32)
+        return m1
+
+    n1 = f()
+    assert (n1 == 0).all()
+
+
+def test_cast():
+    @compile()
+    def f(t1: Tensor[F32, DYNAMIC, 32, 5]) -> Tensor[F32, 64, 32, DYNAMIC]:
+        t2 = t1.cast((64, 32, DYNAMIC))
+        return t2
+    
+    n1 = multi_arange((64, 32, 5), np.float32)
+    cor_res = n1.copy()
+    assert (f(n1) == cor_res).all()
 
 
 if __name__ == "__main__":
@@ -267,3 +310,5 @@ if __name__ == "__main__":
     run(test_store_slice_exp)
     run(test_strided_ndarray_to_tensor)
     run(test_arg_copy)
+    run(test_zeros)
+    run(test_cast)

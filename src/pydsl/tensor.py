@@ -2,12 +2,11 @@ import collections.abc as cabc
 import ast
 import typing
 from functools import cache
-from pydsl.macro import CallMacro, Compiled, Evaluated
+from pydsl.macro import CallMacro, Compiled, Evaluated, MethodType
 
 import mlir.dialects.tensor as mlir_tensor
 import mlir.ir as mlir
 from mlir.ir import DenseI64ArrayAttr, OpView, RankedTensorType, Value
-import mlir.dialects._tensor_ops_gen as tensor_ops_gen
 
 from pydsl.memref import (
     UsesRMRD,
@@ -175,7 +174,7 @@ class Tensor(typing.Generic[DType, *Shape], UsesRMRD):
             isinstance(key, SupportsIndex) for key in key_list
         ):
             key_list = lower_flatten([Index(key) for key in key_list])
-            rep = tensor_ops_gen.extract(lower_single(self), key_list)
+            rep = mlir_tensor.extract(lower_single(self), key_list)
             return self.element_type(rep)
 
         # Otherwise, do an extract_slice op
@@ -187,7 +186,7 @@ class Tensor(typing.Generic[DType, *Shape], UsesRMRD):
         result_type = TensorFactory(tuple([DYNAMIC] * dim), self.element_type)
         dynamic_i64_attr = DenseI64ArrayAttr.get([DYNAMIC] * dim)
 
-        rep = tensor_ops_gen.extract_slice(
+        rep = mlir_tensor.extract_slice(
             result_type.lower_class()[0],
             lower_single(self),
             lo_list,
@@ -215,9 +214,7 @@ class Tensor(typing.Generic[DType, *Shape], UsesRMRD):
         ):
             value_mlir = lower_single(self.element_type(value_st))
             key_list = lower_flatten([Index(key) for key in key_list])
-            rep = tensor_ops_gen.insert(
-                value_mlir, lower_single(self), key_list
-            )
+            rep = mlir_tensor.insert(value_mlir, lower_single(self), key_list)
             self.value = rep
             return rep
 
@@ -245,7 +242,7 @@ class Tensor(typing.Generic[DType, *Shape], UsesRMRD):
             if value_st.shape[i] == DYNAMIC
         ]
 
-        rep = tensor_ops_gen.insert_slice(
+        rep = mlir_tensor.insert_slice(
             lower_single(value_st),
             lower_single(self),
             lo_list,
@@ -257,6 +254,20 @@ class Tensor(typing.Generic[DType, *Shape], UsesRMRD):
         )
         self.value = rep
         return rep
+
+    def __class_getitem__(cls, args: tuple):
+        if not isinstance(args, tuple):
+            args = (args,)
+        
+        if len(args) < 2:
+            raise TypeError(
+                f"Tensor expected at least 2 Generic arguments, got {args}"
+            )
+        
+        dtype = args[0]
+        shape = args[1:]
+
+        return cls.class_factory(tuple(shape), dtype)
 
     @classmethod
     def on_class_getitem(
@@ -272,13 +283,59 @@ class Tensor(typing.Generic[DType, *Shape], UsesRMRD):
 
         if len(args) < 2:
             raise TypeError(
-                f"MemRef expected at least 2 Generic arguments, got {args}"
+                f"Tensor expected at least 2 Generic arguments, got {args}"
             )
 
         dtype = args[0]
         shape = args[1:]
 
         return cls.class_factory(tuple(shape), dtype)
+    
+    @CallMacro.generate(method_type=MethodType.INSTANCE)
+    def cast(visitor: "ToMLIRBase", self: typing.Self, shape: Evaluated):
+        """
+        Convert a tensor from one type to an equivalent type without changing
+        any data elements. The resulting tensor type will have the same element
+        type. shape is the shape of the new tensor and must be known at compile
+        time. For any constant dimensions of shape, the input tensor must
+        actually have that dimension at runtime, otherwise the operation is
+        invalid.
+
+        Note: this function only returns a tensor with the updated type, it
+        does not modify the type of the input tensor.
+
+        Example:
+
+        def f(t1: Tensor[F32, DYNAMIC, 32, 5]) -> Tensor[F32, 64, 32, DYNAMIC]:
+            # Only valid if the first dimension of t1 is always 64
+            t2 = t1.cast((64, 32, DYNAMIC))
+            return t2
+        
+        """
+        if not isinstance(shape, cabc.Iterable):
+            raise TypeError(f"{repr(shape)} is not iterable")
+        
+        if not all([isinstance(x, int) for x in shape]):
+            raise TypeError(
+                f"shape should be a tuple of integers known at compile time ",
+                f"got {repr(shape)}"
+            )
+        
+        shape = tuple(shape)
+
+        if len(shape) != len(self.shape):
+            raise ValueError(
+                f"trying to cast a tensor of rank {len(self.shape)} to rank ",
+                f"{len(shape)}, ranks should be equal when casting"
+            )
+        
+        for x, y in zip(self.shape, shape):
+            if x != y and x != DYNAMIC and y != DYNAMIC:
+                raise ValueError(f"incompatible dimensions: {x} and {y}")
+
+        result_type = TensorFactory(shape, self.element_type)
+        rep = mlir_tensor.cast(lower_single(result_type), lower_single(self))
+        return result_type(rep)
 
 
 # Convenient alias
@@ -308,22 +365,47 @@ def verify_dynamics_val(t_type: type[Tensor], dynamics_val: Tuple) -> None:
         )
 
 
-@CallMacro.generate()
+# @CallMacro.generate()
 def empty(
-    visitor: ToMLIRBase, t_type: Evaluated, dynamics_val: Compiled = None
+    visitor: ToMLIRBase, shape: Compiled, dtype: Evaluated
 ) -> SubtreeOut:
-    if dynamics_val is None:
-        dynamics_val = Tuple.from_values(visitor, *())
-    verify_tensor_type(t_type)
-    verify_dynamics_val(t_type, dynamics_val)
-    dynamics_val = [lower_single(Index(i)) for i in lower(dynamics_val)]
-    idx = 0
-    orig_shape = t_type.shape
-    shape = [0] * len(orig_shape)
-    for i in range(len(orig_shape)):
-        if orig_shape[i] == DYNAMIC:
-            shape[i] = dynamics_val[idx]
-            idx += 1
-        else:
-            shape[i] = orig_shape[i]
-    return t_type(mlir_tensor.empty(shape, lower_single(t_type.element_type)))
+    if not isinstance(shape, Tuple):
+        raise TypeError(f"shape should be a Tuple, got {type(shape).__qualname__}")
+    
+    shape = [Index(i) for i in shape.as_iterable(visitor)]
+    rank = len(shape)
+    t_type = TensorFactory(tuple([DYNAMIC]*rank), dtype)
+    return t_type(mlir_tensor.empty(lower_single(t_type), lower_flatten(shape)))
+
+
+# Python is a bad language
+import pydsl.linalg as linalg
+
+@CallMacro.generate()
+def zeros(
+    visitor: ToMLIRBase, shape: Compiled, dtype: Evaluated
+) -> SubtreeOut:
+    if not isinstance(shape, Tuple):
+        raise TypeError(f"shape should be a Tuple, got {type(shape).__qualname__}")
+    
+    print(type(empty))
+    emp = empty(visitor, shape, dtype)
+    return linalg.fill(visitor, dtype(0), emp)
+
+# @CallMacro.generate()
+# def empty(
+#     visitor: ToMLIRBase, t_type: Evaluated, dynamics_val: Compiled
+# ) -> SubtreeOut:
+#     verify_tensor_type(t_type)
+#     verify_dynamics_val(t_type, dynamics_val)
+#     dynamics_val = [lower_single(Index(i)) for i in lower(dynamics_val)]
+#     idx = 0
+#     orig_shape = t_type.shape
+#     shape = [0] * len(orig_shape)
+#     for i in range(len(orig_shape)):
+#         if orig_shape[i] == DYNAMIC:
+#             shape[i] = dynamics_val[idx]
+#             idx += 1
+#         else:
+#             shape[i] = orig_shape[i]
+#     return t_type(tensor.empty(lower_single(t_type), dynamics_val))

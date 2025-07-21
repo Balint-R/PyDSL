@@ -2,7 +2,6 @@ import typing
 
 import mlir.dialects.linalg as linalg
 from mlir.dialects import linalg as mlir_linalg
-from mlir.dialects import tensor as mlir_tensor
 from mlir.dialects.linalg import DefinedOpCallable
 from mlir.dialects.linalg.opdsl.lang.comprehension import BinaryFn, TypeFn
 
@@ -13,28 +12,6 @@ from pydsl.tensor import DYNAMIC, Tensor, TensorFactory
 
 # Compiled TypeAlias needs Lowerable
 from pydsl.type import Float, Int, Sign
-
-
-def build_empty_tensor(
-    sizes,
-    element_type,
-    *,
-    loc=None,
-    ip=None,
-):
-    dynamic_sizes = []
-    static_sizes = []
-    for s in sizes:
-        if isinstance(s, int):
-            static_sizes.append(s)
-        else:
-            static_sizes.append(DYNAMIC)
-            dynamic_sizes.append(s)
-
-    result_type = TensorFactory(tuple(static_sizes), element_type)
-    return mlir_tensor.empty(
-        lower_single(result_type), dynamic_sizes, loc=loc, ip=ip
-    )
 
 
 def _gen_elementwise_unary_macro(op: DefinedOpCallable) -> CallMacro:
@@ -53,23 +30,10 @@ def _gen_elementwise_unary_macro(op: DefinedOpCallable) -> CallMacro:
             )
 
         match x:
-            case Tensor():
-                # Tensors are immutable, so a new Tensor is always made
-                ret_tensor = TensorFactory(x.shape, x.element_type)
-                ret = ret_tensor(
-                    build_empty_tensor(
-                        x.runtime_shape, lower_single(x.element_type)
-                    )
+            case Tensor() | MemRef():
+                return type(x)(
+                    op(lower_single(x), outs=[lower_single(x)])
                 )
-                tensor = x
-                return type(tensor)(
-                    op(lower_single(tensor), outs=[lower_single(ret)])
-                )
-            case MemRef():
-                # MemRefs are mutable, so they are always written in-place
-                memref = x
-                op(lower_single(memref), outs=[lower_single(memref)])
-                return memref
             case _:
                 raise Exception(
                     f"Elementwise linalg operation {op.op_name} expected "
@@ -93,7 +57,7 @@ square = _gen_elementwise_unary_macro(mlir_linalg.square)
 tanh = _gen_elementwise_unary_macro(mlir_linalg.tanh)
 erf = _gen_elementwise_unary_macro(mlir_linalg.erf)
 
-# TODO: For some reason, reciprocal doesn't have an unary op. The Python
+# TODO: For some reason, reciprocal doesn't have a unary op. The Python
 # binding should be modified somewhat...
 
 BinaryTypeDecision = typing.Callable[
@@ -127,34 +91,19 @@ def _gen_elementwise_binary_macro(
         fn, typefn = type_decision(x)
 
         match x, y:
-            case Tensor(), Tensor():
-                ret_tensor = TensorFactory(x.shape, x.element_type)
-                ret = ret_tensor(
-                    build_empty_tensor(
-                        x.runtime_shape, lower_single(x.element_type)
-                    )
-                )
-                # Tensors are immutable, so a new Tensor is always made
+            # Same syntax works for Tensor and MemRef. For Tensor, a new tensor
+            # will be made. For MemRef, it will be modified in-place.
+            # TODO: writing is always done to the LHS for now
+            case Tensor() | MemRef(), Tensor() | MemRef():
                 return type(x)(
                     linalg.elemwise_binary(
                         lower_single(x),
                         lower_single(y),
-                        outs=[lower_single(ret)],
+                        outs=[lower_single(x)],
                         fun=fn,
                         cast=typefn,
                     )
                 )
-            case MemRef(), MemRef():
-                # MemRefs are mutable, so they are always written in-place
-                # TODO: writing is always done to the LHS for now
-                linalg.elemwise_binary(
-                    lower_single(x),
-                    lower_single(y),
-                    outs=[lower_single(x)],
-                    fun=fn,
-                    cast=typefn,
-                )
-                return x
             case _:
                 raise Exception(
                     f"elementwise linalg operation {fn.fn_name} expected "
@@ -248,6 +197,7 @@ def batch_matmul(visitor: "ToMLIRBase", x: Compiled, y: Compiled):
 
     t = x.element_type
 
+    # TODO: what is typeFn? it is never used
     if issubclass(t, Float):
         typeFn = TypeFn.cast_signed
     elif issubclass(t, Int) and t.sign == Sign.SIGNED:
@@ -286,3 +236,14 @@ def batch_matmul(visitor: "ToMLIRBase", x: Compiled, y: Compiled):
                 f"batch_matmul operation  expected "
                 f"Tensor, got {type(x).__name__}"
             )
+
+@CallMacro.generate()
+def fill(visitor: "ToMLIRBase", c: Compiled, x: Compiled):
+    """
+    Fill a MemRef/Tensor with the single value c.
+    If x is a MemRef, it is modified in-place.
+    If x is a Tensor, a new Tensor is returned.
+    """
+    out = _get_outs_operand(x)
+    rep = mlir_linalg.fill(lower_single(c), outs=[lower_single(out)])
+    return type(x)(rep)
