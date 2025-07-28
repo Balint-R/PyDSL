@@ -6,6 +6,7 @@ import weakref
 from pydsl.frontend import compile
 import pydsl.linalg as linalg
 from pydsl.memref import DYNAMIC
+import pydsl.tensor as tensor
 from pydsl.tensor import Tensor, TensorFactory
 from pydsl.type import F32, F64, Index, SInt32, Tuple, UInt64
 from helper import failed_from, compilation_failed_from, multi_arange, run
@@ -286,7 +287,6 @@ def test_link_ndarray():
     gc.collect()
     assert n1_root_ref() is None
 
-
 def test_zero_d():
     @compile()
     def f(t1: Tensor[SInt32]) -> Tuple[SInt32, Tensor[SInt32]]:
@@ -299,6 +299,43 @@ def test_zero_d():
     assert res1 == 123 and res2 == 456
     assert isinstance(res2, np.ndarray)
     assert res2.shape == ()
+
+
+def test_empty():
+    @compile()
+    def f(ysz: Index) -> Tensor[SInt32, 10, DYNAMIC]:
+        t1 = tensor.empty((10, ysz), SInt32)
+        t1[1, 2] = 100
+        t1[3, 6] = 101
+        t1[9, 7] = 102
+        return t1
+    
+    res = f(8)
+    assert res[1, 2] == 100
+    assert res[3, 6] == 101
+    assert res[9, 7] == 102
+
+
+def test_zeros():
+    @compile()
+    def f() -> TensorF32_3:
+        m1 = tensor.zeros((10, 20, 30), F32)
+        return m1
+
+    test_res = f()
+    cor_res = np.zeros((10, 20, 30), dtype=np.float32)
+    assert (test_res == cor_res).all()
+
+
+def test_cast():
+    @compile()
+    def f(t1: Tensor[F32, DYNAMIC, 32, 5]) -> Tensor[F32, 64, 32, DYNAMIC]:
+        t2 = t1.cast((64, 32, DYNAMIC))
+        return t2
+
+    n1 = multi_arange((64, 32, 5), np.float32)
+    cor_res = n1.copy()
+    assert (f(n1) == cor_res).all()
 
 
 if __name__ == "__main__":
@@ -321,3 +358,7 @@ if __name__ == "__main__":
     run(test_arg_copy)
     run(test_link_ndarray)
     run(test_zero_d)
+    run(test_empty)
+    run(test_zeros)
+    run(test_cast)
+
