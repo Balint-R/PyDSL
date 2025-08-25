@@ -48,13 +48,6 @@ from pydsl.type import Tuple as DTuple
 
 
 # FIXME: turn these into proper passes that return a dict
-def generate_parent(root):
-    for node in ast.walk(root):
-        for child in ast.iter_child_nodes(node):
-            child.parent = node
-
-
-# FIXME: turn these into proper passes that return a dict
 def generate_next_line(root):
     for node in ast.walk(root):
         if hasattr(node, "body") and isinstance(body := node.body, Iterable):
@@ -804,9 +797,6 @@ class ToMLIR(ToMLIRBase):
     ) -> Iterable["Module"]:
         # create additional properties in AST nodes that we will need during
         # compilation
-        generate_parent(
-            node
-        )  # FIXME: this shouldn't be done as it's an illegal field and it mutates the tree (we are not allowed to mutate)
         generate_next_line(
             node
         )  # FIXME: this shouldn't be done as it's an illegal field and it mutates the tree (we are not allowed to mutate)

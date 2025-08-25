@@ -157,10 +157,15 @@ class FunctionLike(typing.Generic[ArgsT, RetT], ABC):
         return f
 
     @classmethod
-    @cache
+    # @cache
     def node_to_header(
         cls, visitor: ToMLIRBase, node: ast.FunctionDef
     ) -> "Function":
+        """
+        Given the AST definition of a function, returns the PyDSL object
+        corresponding to the function. Depending on when this function object
+        is accessed, its body might not yet be initialized.
+        """
         # It is ESSENTIAL that this function result is cached, as this function
         # can potentially be called multiple times with the same
         # FunctionDef, but every FunctionDef needs to be mapped to a unique
