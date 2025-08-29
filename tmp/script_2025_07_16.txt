@@ -1,0 +1,127 @@
+1.
+Hello everyone, today I will be giving a quick introduction to PyDSL, a domain specific language we have been working on.
+Our project is a compiler capable of converting a language written in a subset of Python's syntax to MLIR, which can then be lowered to multiple architectures and undergo significant optimizations.
+Compared to MLIR, PyDSL is much more simple and short, making it easier to write.
+
+Implemented on the right is a heat demo written in PyDSL. It uses affine optimizations, which PyDSL users can define directly in the code.
+
+
+2.
+Here is a much more simple example of a PyDSL program and the MLIR it gets lowered to.
+You will notice that the function is entirely valid Python, the only thing different is that we have this @compile decorator at the top of the function.
+The @compile decorator tells the program that the function should be compiled to MLIR, while everything else is executed as regular Python.
+Compiled PyDSL functions can be called directly from Python, which is very convenient.
+
+
+3.
+Another thing you might notice is that many of our variables have type hints.
+*Python* supports type hints as a language feature, but doesn't actually do anything with them, they are optional.
+*PyDSL* is statically typed and actually uses these type hints when compiling.
+Function parameters and return values must have a type hint to indicate their exact type.
+Within a function body, type hints are not necessary if the compiler can deduce the type of a variable.
+For example, we support lazily computing expressions involving only numeric constants and only converting them to a PyDSL type when necessary.
+
+
+4.
+Let me quickly talk about some of the motivations behind creating PyDSL and its goals.
+The purpose of PyDSL is to allow developers to write high performance kernels in an easy to use, Pythonic language.
+It should be reasonably fast to write and thus result in good productivity.
+It should also be easy to extend in the future.
+Specifically, adding new dialects of MLIR should be easy.
+We achieve this by utilizing MLIR's Python bindings.
+This is good because Python bindings are very easy to make for a new dialect that has C++ bindings, you just specify a .td file and some meta information and tablegen generates the Python binding automatically.
+
+Quick comparison to some existing Python-based languages:
+Compared to Mojo, PyDSL doesn't use any new keywords.
+PyDSL's syntax is a subset of Python's.
+Compared to Triton, PyDSL does not JIT functions, it compiles them when they are declared.
+This is good because you can compile functions without having access to a device, like a GPU or NPU.
+
+
+5.
+Now I will outline the compilation process PyDSL uses.
+An important thing to keep in mind is that @compile functions are always compiled to MLIR, and are never evaluated in Python directly.
+So these lines are never run in Python, but they are converted to MLIR and we execute the MLIR instead.
+First, we use the built-in Python AST module to convert the body of an @compile function to an abstract syntax tree.
+We then traverse this tree, and try to convert each subtree to an MLIR representation.
+The way we do this is, for each Python variable, we assign it a PyDSL object, and we keep a variable stack so we know the MLIR expression whose output corresponds to the current value of each variable.
+
+
+6.
+Each PyDSL object stores information about its type, which we need to know to generate future MLIR operations involving it.
+It also stores an MLIR Python binding object, which represents the last operation in MLIR whose output is the value of this object.
+
+
+7.
+After we have parsed the AST and converted everything to PyDSL types, which in turn store MLIR Python binding types, we can simply call the string method of the MLIR Python binding type to get the actual MLIR that represents the function.
+We then lower that MLIR to an executable.
+This is  the end of the *compilation* process.
+
+Then whenever the @compile function is *called*, we run this output executable, using Python's built-in functionality to load dynamic link libraries.
+To be able to pass parameters to a function, we first convert to Python's built-in ctypes, which can be directly passed to the executable.
+Then we actually call the executable.
+Then we convert its return value from a ctype back to a Python type.
+This is also why type hinting is very important, because we need to know what conversion to do.
+For passing in array-like objects, we use numpy.ndarray as the Python type.
+
+
+8.
+Here are some other features of PyDSL that I didn't have much chance to talk about today.
+
+We already support features from many MLIR dialects, including all the ones listed here.
+
+We have an extensive macro system, which allows compiler developers to define functions that have a lot of control over what they do with their inputs and how they get converted to MLIR.
+They can choose to receive parameters that are evaluated as normal PyDSL, that are evaluated at compile time as Python, or parameters that are still in AST form.
+This system is very useful for implementing features like for loops and built-in functions.
+The macro system also helps make it easier to support more dialects in the future.
+
+We support or plan to support several possible output targets, like NPU, CPU, and polyhedral.
+
+We support compiling Python classes to MLIR modules.
+This is useful to allow the user to access MLIR that's only available at the module level.
+We also use the infrastructure from this to support PyDSL functions calling other PyDSL functions, and calling themselves recursively.
+
+We currently support autotuning and we plan to support C++ style templates.
+A. I will talk a bit more about this later since I still have time.
+B. With autotuning, we try several different parameters for a function (e.g. tile-size or types) and pick the fastest one. With templates, we want to expose this interface to the user and allow them to declare a single function that gets compiled multiple times.
+
+We are currently working to support some amount of interoperability with Triton.
+I believe the main feature is, we want to be able to support calling a Triton function from within a PyDSL function.
+Triton also compiles to MLIR, so we can make our MLIR call their MLIR.
+
+
+9.
+We are developing PyDSL open-source.
+Here is the GitHub repo.
+There are build instructions here on the README.
+There is also documentation, and examples.
+Here is my latest pull request, which implements tensor and memref slicing using the Python slicing syntax
+In the past, some of the development of PyDSL happened in a private Huawei repo on CodeHub, and we only pushed to open-source occasionally, but I think now the plan is to develop PyDSL directly in the open-source version.
+And then our BiSheng project will just have a dependency on the open-source PyDSL.
+
+A. It seems I still have some time, let me quickly try to talk a bit more about autotuning and templates.
+B. That is all I have time for today, now Xingyu will give a demo of PyDSL.
+
+
+10.
+Autotuning works using this @autotune decorator.
+The user can pass in several different values for some variables (or types, since types are really just normal variables in Python).
+We call such a set of variables a "configuration".
+The user also passes in input data for each configuration.
+Then, the compiler runs and times each provided configuration, and uses the MLIR of the fastest configuration.
+When the function is actually called, only this fastest MLIR will be used.
+Useful for example to figure out the best tile size.
+
+11.
+You might notice that this autotuning effectively compiles the same function multiple times with different parameters.
+E.g. here we compile both an F32 and F64 version of a function.
+It would be useful to expose this functionality to users directly.
+We plan to do this using C++ style templates.
+
+That is all I have for today, now Xingyu will give a demo of PyDSL.
+
+
+
+
+
+

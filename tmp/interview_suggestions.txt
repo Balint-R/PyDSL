@@ -1,0 +1,11 @@
+Split usage into separate files
+Focus on existing things, not implemented
+README for user
+Different modes allow: write productive mode, optimize into perf mode
+Be more clear about purpose and goals
+Documentation of CompilationSettings
+Dump MLIR to file?
+More comments/docstrings for examples
+Better error messages
+
+

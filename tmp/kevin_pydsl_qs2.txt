@@ -1,0 +1,80 @@
+1.
+How to do inline function scoping properly?
+
+Currently, scoping is the same as a nested function.
+
+Maybe we should create a new scope stack or a new visitor object?
+
+- Copy scope of wherever decorator is defined.
+
+2.
+
+How to write documentation?
+
+- read the doc
+- doxygen is primarily designed for C, C++
+- sphinx
+
+
+How to do versioning?
+
+
+3.
+Narrowing int cast
+
+- truncate function
+- UInt32.trunacte(a)
+
+4.
+Why are interceptors processed in forward order and not reverse order?
+
+- Interceptors seem to be unused right now, can probably do whatever
+
+5.
+Why do we not delete temporary files?
+
+- Bug in 3.11. fixed in 3.12?
+- delete_on_close added in 3,12
+
+6.
+compiler.py ToMLIR catch_comp_error misplaced docstring
+
+- Kevin doesn't know either
+
+7.
+Make module function syntax use valid Python identifiers
+https://github.com/Huawei-CPLLab/PyDSL/issues/35
+
+- No good solution
+- Use Python modules? A bit inconvenient to write PyDSL and Python in different files
+- Decorator specifies module
+- Mesh has to be defined at module level? May
+
+
+8.
+if statement cannot update variables
+https://github.com/Huawei-CPLLab/PyDSL/issues/33
+
+- scf.yield
+- need to do some dataflow analysis, see final value assigned to each variable, find union of all variables written to, insert yield op for each
+
+9.
+Infer output of linalg elementwise binary
+https://github.com/Huawei-CPLLab/PyDSL/issues/26
+
+add(t1, t2, out=t3)
+Tensor[F32]
+Tensor[SInt64]
+Tensor[SInt64]
+
+- Similar to scalar add
+- Separate add_cast or add_unsafe
+
+add(m1, m2, out=m1)
+add(m1, m2) -> CompileError
+m3 = add(m1, m2)
+m1.add(m2) -> mutate m1
+m1 += m2
+
+
+

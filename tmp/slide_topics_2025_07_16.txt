@@ -1,0 +1,21 @@
+Converged closed, open branches
+Set up BZ laptop, built llvm-project
+Watched first video
+Work on slides
+
+- General PyDSL intro
+  - Simple example code
+  - Purpose: fast way to write MLIR
+- AST parsing
+  - Autotuning: data types, tile sizes. New name (PyDSL templating)
+- MLIR Python bindings
+  - Python binding is generated for any dialect with a proper td file
+  - Very reusable
+  - Example: adding AVE dialect, mlir tblgen, td file -> Python binding
+  - PyDSL on top of binding
+
+  - Static typing, static compiling, no JIT, unlike Triton. Very similar to MLIR.
+  - Type inferencing within PyDSL function, strongly typed function parameters and returns
+- PyDSL types
+- Macros
+- Calling PyDSL function from Python

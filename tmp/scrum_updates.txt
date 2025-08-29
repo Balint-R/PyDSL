@@ -1,0 +1,106 @@
+Fully moved to open source.
+
+Merged MR on BiSheng to match first open-source version.
+Merged first PR on GitHub to implement slicing and BiSheng changes.
+Two more PRs: a small one with changelog and actual one with CallMacro stuff.
+ndarray
+All work is on GitHub on different branches.
+
+Future: constexpr, linalg updates, add git submodule
+
+
+Finished ndarray linking, added testcases.
+That and 2 previous PRs are merged.
+Yesterday, found 2 small bugs in compiler.py, submitted PRs for those.
+Currently have 3 PRs on GitHub.
+Reduce
+Misc linalg simplification
+
+
+Option 1:
+Use existing function interface
+Replace return op with yield op
+How to do replacement?
+Function is already compiled, how to steal its MLIR?
+
+Option 2:
+@inline function
+Push linalg context onto the stack
+- Replaces return with yield
+- Look into how affine yield, scf yield are implemented?
+
+Probably also want lambdas
+
+Allow specifying and implicitly inferring init, dimensions, output type?
+
+Bug: f32 + f64 results in f32.
+
+Initial version: require user to specify everything, infer things later.
+
+Syntax:
+
+reduce(func, in, init=None, dimensions=None)
+
+inline function
+- basically done, writing testcases now, expect PR today
+
+Review James's Triton PR:
+- Many issues, we need better internal bookkeeping of Triton functions, I am very worried about name collisions
+- Need to look into why tirton-ascend adds extra args
+  - Try to predict or disable
+  - If can't disable, at least parse MLIR into Python binding instead of parsing the string manually
+
+
+Reviewed James's PR
+Reduce, type checking, documentation (docstrings)
+Broadcast
+
+Finished reduce and broadcast, working example of SoftMax, still haven't had time to write testcases.
+James's PR
+Start write docs for onboarding
+Set up stuff for interview
+When are interviews?
+
+
+
+Finished reduce, broadcast PR, ready for review.
+4 PRs ready for review, 3 small one, 1 big one.
+Onboarding document, draft PR.
+Interviews
+
+Dev doc, merged.
+Code review.
+Added better support for subclassing CompilationTarget and ToMLIR
+MemRef address space, tensor empty, zeros.
+Fixed scope for InlineFunction, open PR.
+
+
+Help onboard
+Update build instructions, open PR
+Fixed a small bug with casting bool to Number which we discussed on Thursday w Kevin, merged
+Trying to set up AscendTarget and bishengir-compile yesterday. Generally not satisfied, still need a lot of work on PyDSL AscendTarget. There are also issues with bishengir-compile, some of them are bugs: I discussed with Harley and I will submit issues for them. Others are just bishengir-compile doesn't support some things, which is not as important.
+Concluded I we can probably use memref.copy and it should get lowered to hivm.hir.store if between different memory spaces.
+Working upstream on big PR, tensor empty, cast, zeros, memref address space, memref cast, memref alloc.
+
+
+
+Submit 4 issues about bishengir-compile.
+Opened PR about tensor.empty, tensor.zeros, new memref.alloc syntax, address spaces. Address spaces have actual MLIR objects and aren't quite strings, so had to add support for that. Should work now.
+Opened PR about memref.copy.
+Reviewed all PRs not opened by me other than polybench.
+Will look at Kavin's downstream PR.
+Need to get lots of things merged.
+Who is working on general AscendTarget?
+
+
+Reviewed PRs both downstream and upstream.
+Implemented HIVM address spaces downstream, pushed to a branch, but can't get a testcase to pass.
+This should be the only remaining thing necessary for A5? Other than merging things.
+For A3, it seems we don't have Python bindings...
+Opened and merged one PR upstream to support vector type.
+
+HIVM load, store, all elemwise unary, elemwise binary (27 ops in total)
+Opened upstream PR for memref.cast, since seemed maybe useful for some of the perf mode things (and I also had a lot of this code written for like a month)
+Started working on exit presentation, finish today or tomorrow?
+Submitted and merged a 10 line PR upstream to stop compilation if a command fails.
+

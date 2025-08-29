@@ -1,0 +1,59 @@
+1.
+Why does Tuple.as_iterable take visitor param?
+- Implements CompileTimeIterable
+
+2.
+tensor.py has more reasonable DYNAMIC vs Dynamic
+- Maybe try to see how hard it is to get typing.Literal to work.
+
+3.
+Why do MemRef/Tensor subclasses have names? "AnonymousMemRefSubclass"
+- Exists because subclass must have name
+- Maybe we always auto generate it?
+
+4.
+When exactly to use _name? For functions the user shouldn't use? Or functions other parts of the compiler shouldn't user?
+- _name functions should not be accessed even by other parts of the compiler
+- Thus, don't name a function _xyz if you will want to use it from other parts of the compiler
+
+5.
+What is dataflow.py?
+- scf for loop canonicalization pass
+- Maybe we can just yield everything
+- Require user to define yielded values before. Reason:
+    for i in range(5):
+        a = i
+    print(a)
+
+    for i in range(0):
+        b = i
+    print(b)
+
+6. NOT DISCUSSED
+Restructure compile to use passes:
+https://github.com/Huawei-CPLLab/PyDSL/issues/84
+
+
+Unrelated:
+- Add Optional type? Represented as pair<bool, T>.
+
+7. NOT DISCUSSED
+Linalg bin op semantics.
+https://github.com/Huawei-CPLLab/PyDSL/issues/26
+Should we use same syntax for tensor and memref?
+MLIR doesn't because tensors are immutable, but memrefs aren't.
+
+8. NOT DISCUSSED
+Why does visit need @cache?
+
+9.
+Target audience of PyDSL?
+Usecases:
+- Used by people who know MLIR, want to write MLIR write easier.
+  - Slight syntactic sugar. Better language design
+- People familiar with Triton
+- People writing kernels without much knowledge of MLIR should also be able to use PyDSL. PyDSL should support Python syntax that's useful for high performance computing. If Python has stupid features that are hard to support and not useful, we do not have to support them.
+
+10. NOT DISCUSSED
+Better syntax than docstrings for tags?
+

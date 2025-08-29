@@ -1,0 +1,29 @@
+Replace __qualname__ in error messages
+
+```py
+from pydsl.type import F32
+
+class A:
+    class B:
+        pass
+
+x = A.B()
+print(type(x))
+print(type(x).__qualname__)
+print(type(x).__name__)
+
+print(F32)
+print(F32.__qualname__)
+print(F32.__name__)
+```
+This outputs
+```
+<class '__main__.A.B'>
+A.B
+B
+<class 'pydsl.type.F32'>
+F32
+F32
+```
+
+So I think for error messages, it is actually more useful to print `type(x)` instead of `type(x).__qualname__`. Oops. I thought `type(x).__qualname__` was good, because it's better than `type(x).__name__`. But it seems the simplest solution of `type(x)` is actually ideal.

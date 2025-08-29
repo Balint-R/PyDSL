@@ -1,0 +1,66 @@
+1. Decorators
+https://github.com/Huawei-CPLLab/PyDSL/issues/87
+
+2. Split compilation into passes
+https://github.com/Huawei-CPLLab/PyDSL/issues/84
+- Can improve perf with parallelism (low priority)
+- Extract features one by one
+- Start by creating pass system, initially, there is one pass, current ToMLIR, move features out one by one
+- Create our own AST
+- Subclass AST nodes
+- Names point to struct containing info
+- Advantage: can catch multiple errors at the same time
+- Better error messages
+
+3. Linalg binop semantics
+https://github.com/Huawei-CPLLab/PyDSL/issues/26
+Should memref and tensor have the same semantics? Should we modify tensors in-place?
+- For MLIR people, it makes more sense to treat memref and tensor differently
+
+a[f(1)] += 1
+a[f(1)] = a[f(1)] + 1
+
+Semantics of a += b is clear (modify in-place for both MemRef and Tensor).
+Semantics of a + b is clear (only supported for Tensor).
+The question is what to do for linalg.add(a, b, out=c)?
+- Modify c
+- In general: memref is like a C pointer, tensor is like a Python list
+
+
+a: Tensor
+a[1, 2] = 3
+new_a = tensor.insert(a, (1, 2), 3)
+
+
+
+
+# Current behaviour
+
+b = a
+b[1, 2] = 3
+# a gets modified
+
+b = a[:]
+b[1, 2] = 3
+print(a)
+# a does not get modified
+
+
+
+
+4. How to name tensor.cast function?
+https://github.com/Huawei-CPLLab/PyDSL/pull/96
+
+5. Type checking
+https://github.com/Huawei-CPLLab/PyDSL/issues/62
+Maybe for CallMacros, we automatically check whether the args passed in match type hints, and throw an error if not.
+What about functions the user calls outside of PyDSL? E.g. MemRefFactory?
+
+- Add for CallMacros and normal functions?
+
+6. Linalg elemwise
+Make it a callmacro calling another callmacro/function?
+- People want code readability instead of code size
+
+
+

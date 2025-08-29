@@ -1,0 +1,90 @@
+1.
+Why do we assign default values to Python class attributes? E.g. in ToMLIR or MemRef.
+- Can remove as long as doesn't cause problems
+
+
+2.
+https://github.com/Huawei-CPLLab/PyDSL/issues/17#issuecomment-3161363763
+https://github.com/Huawei-CPLLab/PyDSL/issues/38
+What is the benefit of having compile time operations instead of overloading the built-in ones?
+
+- Another case: tuple is not iterable, only compiletimeiterable
+
+- Not good to use for not same purpose as Python's language features
+- What if we want to support more operations
+	- Invalid, op_xyz is only called for built-in ops found by AST
+
+
+3.
+Constexpr Python types
+https://github.com/Huawei-CPLLab/PyDSL/issues/17#issuecomment-3156167418
+- Mark PyDSL types as "PyDSL type". Anything that's not a PyDSL type
+- Have list of things that can be cast to Constexpr (currently Number) (int, str, float)
+- Throw an error for other things
+
+- Write specific documentation about how PyDSL works
+
+
+4.
+tensor.py has more reasonable DYNAMIC vs Dynamic
+
+5.
+Why does Tuple.as_iterable take visitor param?
+
+6.
+Thoughts on making arith dialect things a separate file? Also rules on casting. Use similar casting rules as C? Or only do even safer casts?
+https://github.com/Huawei-CPLLab/PyDSL/issues/46
+- Consider moving Numeric types to arith.py
+- Having MLIR stuff in arith.py no good, if we impl a new type
+
+7.
+Type hints for inline functions.
+https://github.com/Huawei-CPLLab/PyDSL/issues/62
+Maybe we don't want inline functions to cast args/ret type at all?
+Then they are quite different from normal functions.
+CallMacros just ignore annotations more specific than Compiled, Evaluated, etc?
+
+Right now, InlineFunctions have somewhat different syntax than normal functions due to type hints. See tensor.full for example.
+
+- Kill InlineFunction, use transform sequence
+
+
+8.
+Dynamic type checking for CallMacros
+- If a user calls a CallMacro with a type it doesn't expect, high chance they get a not great error message.
+- Writing isinstance checks in each CallMacro is tedious (although this is what I am doing rn)
+- What if we had stuff like Compiled[Tensor | MemRef] and for any CallMacro with good typehints, we automatically check type of passed in arg and throw an error if mismatch.
+- Maybe too much effort to implement proper type checking syntax (are there libraries that do this?)
+	tuple[int, ...] tuple[int]
+	MemRef[F32, ...] | None | Tensor[T, ...]
+- Our own custom type annotating syntax?
+- Check what infrastructure typing has
+
+	Tuple[Number | SupportsIndex, ...]
+
+9.
+Linalg bin op semantics
+
+10.
+When exactly to use _name? For functions the user shouldn't use? Or functions other parts of the compiler shouldn't user?
+
+11.
+Should we use MLIR functions or call the ops directly?
+E.g. mlir_linalg.broadcast(...) vs mlir_linalg.BroadCastOp(...)
+
+12.
+Order of arguments for tensor.full?
+Thoughts on arg order/signature of other similar funcs?
+
+13.
+Why do MemRef/Tensor subclasses have names? "AnonymousMemRefSubclass"
+
+
+
+-1.
+Bad line number 3 when inline function CEs
+
+
+
+
+
